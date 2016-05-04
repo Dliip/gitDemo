@@ -1,0 +1,20 @@
+.gradle
+build/
+
+# Ignore Gradle GUI config
+gradle-app.setting
+
+# Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
+!gradle-wrapper.jar
+
+# Eclipse project files
+.cproject
+.project
+.settings/gradle.prefs
+.settings/org.eclipse.buildship.core.prefs
+.settings/org.eclipse.cdt.codan.core.prefs
+
+# Microsoft Visual Studio project files
+*.sdf
+*.sln
+.vs/

@@ -1,0 +1,341 @@
+apply plugin: 'cpp'
+apply plugin: 'eclipse'
+apply plugin: 'maven-publish'
+apply plugin: 'oai.reqm2'
+
+group = "com.elektrobit.neo"
+
+buildscript {
+    repositories {
+        maven {
+            url = "http://nexus.ebgroup.elektrobit.com/nexus/content/groups/public/"
+        }
+        maven {
+            url = "http://nexus.ebgroup.elektrobit.com/nexus/content/repositories/con.snapshots/"
+            credentials {
+                username nexusUser
+                password nexusPassword
+            }
+        }
+        maven {
+            url = "http://nexus.ebgroup.elektrobit.com/nexus/content/repositories/con.releases/"
+            credentials {
+                username nexusUser
+                password nexusPassword
+            }
+        }
+    }
+    
+    dependencies {
+    	classpath group: 'com.elektrobit.oai', name: 'oai_tools', version: '3.4.9'
+	}
+}
+
+repositories {
+	mavenLocal()
+	maven {
+		url "http://nexus.ebgroup.elektrobit.com/nexus/content/repositories/con.releases/"
+		credentials {
+			username nexusUser
+			password nexusPassword
+		}
+	}
+}
+
+configurations {
+	prebuiltZippedCppLibraries
+}
+
+dependencies {
+	prebuiltZippedCppLibraries 'com.elektrobit.neo:curl:7.47.1.1:libcurl-vc12-x86-debug-static-ssl-static-ipv6-sspi@zip'
+	prebuiltZippedCppLibraries 'com.elektrobit.neo:POCO:1.6.0:windows@zip'
+}
+
+model {
+	repositories {
+		libs(PrebuiltLibraries) {
+			curl {
+				headers.srcDir "${project.buildDir}/lib/curl/libcurl-vc12-x86-debug-static-ssl-static-ipv6-sspi/include"
+				binaries.withType(StaticLibraryBinary) {
+					staticLibraryFile = file("${project.buildDir}/lib/curl/libcurl-vc12-x86-debug-static-ssl-static-ipv6-sspi/lib/libcurl_a_debug.lib")
+				}
+			}
+			poco {
+				headers.srcDir "${project.buildDir}/lib/POCO/windows/include"
+			}
+		}
+	}
+	
+	components {
+		CCGCore(NativeLibrarySpec) {
+			binaries {
+				withType(StaticLibraryBinarySpec) {
+					cppCompiler.define "CLOUD_STATIC"
+				}
+				withType(SharedLibraryBinarySpec) {
+					cppCompiler.define "CLOUD_EXPORTS"
+				}
+				all {
+					if (toolChain in VisualCpp) {
+						cppCompiler.define "CURL_STATICLIB"
+					}
+					lib library: "curl", linkage: "static"
+				    cppCompiler.define "POCO_DLL"
+				    cppCompiler.define "POCO_LOG_DEBUG"
+				    lib library: "poco", linkage: "api" 
+				    linker.args "/LIBPATH:${project.buildDir}/lib/POCO/windows/lib/" 
+				}
+			}
+		}
+		CCGCoreTest(NativeExecutableSpec) {
+			binaries.all {
+				cppCompiler.define "CLOUD_STATIC"
+				lib library: "CCGCore", linkage: "static"
+				
+				lib library: "curl", linkage: "api"
+
+				lib library: "googletest", linkage: "static"
+				lib library: "googlemock", linkage: "static"
+				
+				cppCompiler.define "POCO_DLL"
+				lib library: "poco", linkage: "api"
+				linker.args "/LIBPATH:${project.buildDir}/lib/POCO/windows/lib/"
+			}
+		}
+		CCGCoreITest(NativeExecutableSpec) {
+			binaries.all {
+				lib library: "CCGCore", linkage: "shared"
+
+				lib library: "curl", linkage: "api"
+				lib library: "googletest", linkage: "static"
+				
+				cppCompiler.define "POCO_DLL"
+				lib library: "poco", linkage: "api"
+				linker.args "/LIBPATH:${project.buildDir}/lib/POCO/windows/lib/"
+
+				lib library: "TestUtils", linkage: "static"
+				lib library: "utils", linkage: "static"
+			}
+		}
+		CCGCoreSTest(NativeExecutableSpec) {
+			binaries.all {
+				cppCompiler.define "CLOUD_STATIC"
+				lib library: "CCGCore", linkage: "static"
+
+				lib library: "curl", linkage: "static"
+				lib library: "googletest", linkage: "static"
+				
+				cppCompiler.define "POCO_DLL"
+				lib library: "poco", linkage: "api"
+				linker.args "/LIBPATH:${project.buildDir}/lib/POCO/windows/lib/"
+			}
+		}
+
+		googletest(NativeLibrarySpec) {
+			sources {
+				cpp {
+					source {
+						srcDir "./googletest/googletest/src/"
+						include "*.cc"
+						exclude "gtest-all.cc"
+					}
+					exportedHeaders {
+						srcDir "./googletest/googletest/include/"
+					}
+				}
+			}
+			binaries {
+				all {
+					tasks.withType(CppCompile) {
+						includes.from("./googletest/googletest/")
+					}
+				}
+			}
+		}
+		
+		googlemock(NativeLibrarySpec) {
+			sources {
+				cpp {
+					source {
+						srcDir "./googletest/googlemock/src/"
+						include "*.cc"
+						exclude "gmock-all.cc"
+					}
+					exportedHeaders {
+						srcDir "./googletest/googlemock/include/"
+						srcDir "./googletest/googletest/include/"
+					}
+				}
+			}
+			binaries {
+				all {
+					lib library: "googletest", linkage: "static"
+				}
+			}
+		}
+
+		TestUtils(NativeLibrarySpec) {
+			binaries {
+				all {
+					cppCompiler.define "POCO_DLL"
+					lib library: "poco", linkage: "api"
+					linker.args "/LIBPATH:${project.buildDir}/lib/POCO/windows/lib/"
+
+					lib library: "utils", linkage: "static"
+				}
+			}
+		}
+		TestUtilsITest(NativeExecutableSpec) {
+			binaries.all {
+				lib library: "TestUtils", linkage: "static"
+
+				lib library: "googletest", linkage: "static"
+
+				cppCompiler.define "POCO_DLL"
+				lib library: "poco", linkage: "api"
+				linker.args "/LIBPATH:${project.buildDir}/lib/POCO/windows/lib/"
+
+				lib library: "utils", linkage: "static"
+			}
+		}
+
+		utils(NativeLibrarySpec) {
+		}
+	}
+
+	binaries {
+		all {
+			if (toolChain in VisualCpp) {
+				cppCompiler.args "/DEBUG"
+				cppCompiler.args "/Zi"
+				
+				cppCompiler.args "/EHsc"
+				cppCompiler.args "/FS"
+				cppCompiler.args "/MDd" // https://msdn.microsoft.com/library/2kzt1wy3.aspx
+
+				linker.args "/DEBUG"
+			}
+		}
+		withType(NativeExecutableBinarySpec) {
+			if (toolChain in VisualCpp) {
+				linker.args "/SUBSYSTEM:CONSOLE"
+			}
+		}
+	}
+}
+
+task cppSourceReqm2Import( type: com.elektrobit.oai.reqm2.importer.ReqM2SourceImportTask ) {
+    group = 'build'
+    baseDir = project.file( 'src/CCGCore/cpp/')
+    artifactId = project.hasProperty( 'artifactId' ) ? project.artifactId : project.name
+	docType = 'impl'
+	coversIdPrefix = 'CloudInterfaceGeneratorCore.'
+	patterns = ["**/*.cpp"]
+}
+requirements.dependsOn cppSourceReqm2Import
+reqm2artifact.dependsOn cppSourceReqm2Import
+
+task cppUtestReqm2Import( type: com.elektrobit.oai.reqm2.importer.ReqM2SourceImportTask ) {
+    group = 'build'
+    baseDir = project.file( 'src/CCGCoreTest/cpp/')
+    artifactId = project.hasProperty( 'artifactId' ) ? project.artifactId : project.name
+	docType = 'utest'
+	coversIdPrefix = 'CloudInterfaceGeneratorCore.'
+	patterns = ["**/*.cpp"]
+}
+requirements.dependsOn cppUtestReqm2Import
+reqm2artifact.dependsOn cppUtestReqm2Import
+
+task cppStestReqm2Import( type: com.elektrobit.oai.reqm2.importer.ReqM2SourceImportTask ) {
+    group = 'build'
+    baseDir = project.file( 'src/CCGCoreSTest/cpp/')
+    artifactId = project.hasProperty( 'artifactId' ) ? project.artifactId : project.name
+	docType = 'stest'
+	coversIdPrefix = 'CloudInterfaceGeneratorCore.'
+	patterns = ["**/*.cpp"]
+}
+requirements.dependsOn cppStestReqm2Import
+reqm2artifact.dependsOn cppStestReqm2Import
+
+reqm2artifact {
+	from("build/tmp/CCGCore/reqm2/import")
+}
+
+task copyIncludes (type: Copy) {
+	from("${project.projectDir}/src/CCGCore/headers")
+    into("${project.buildDir}/libs/CCGCore/include")
+}
+
+task copyIncludesTestUtils (type: Copy) {
+
+	from("${project.projectDir}/src/TestUtils/headers")
+	into("${project.buildDir}/libs/TestUtils/include")
+}
+
+task copyIncludesUtils (type: Copy) {
+
+    from("${project.projectDir}/src/utils/headers")
+	into("${project.buildDir}/libs/utils/include")
+}
+
+task deliveryArchive(type: Zip, dependsOn: [copyIncludes, "CCGCoreSharedLibrary", "CCGCoreStaticLibrary"]) {
+	destinationDir file("${project.buildDir}/distributions/")
+	from "${project.buildDir}/libs/CCGCore"
+}
+
+task deliveryArchiveTestUtils(type: Zip, dependsOn: [copyIncludesTestUtils, copyIncludesUtils, "TestUtilsSharedLibrary", "TestUtilsStaticLibrary", "utilsSharedLibrary", "utilsStaticLibrary"]) {
+	destinationDir file("${project.buildDir}/distributions/")
+	from "${project.buildDir}/libs/testUtils"
+	from "${project.buildDir}/libs/utils"
+}
+
+publishing {
+    publications {
+		CCGCore_libraries(MavenPublication) {
+			artifactId 'CCGCore'
+			artifact deliveryArchive {
+				classifier "windows_x86"
+			}
+		}
+		CCGCore_TestUtils(MavenPublication) {
+			artifactId 'CCGCoreTestUtils'
+			artifact deliveryArchiveTestUtils {
+				classifier "windows_x86"
+			}
+		}
+		oreqm_files(MavenPublication) {
+			artifactId 'CCGCore_requirements'
+            artifact reqm2artifact
+        }
+    }
+
+    repositories {
+    	maven {
+            url "http://nexus.ebgroup.elektrobit.com/nexus/content/repositories/con.${project.version.endsWith('-SNAPSHOT') ? 'snapshots' : 'releases' }/"
+			credentials {
+				username nexusUser
+				password nexusPassword
+			}
+        }
+    }
+}
+
+task fetchCacertPem(dependsOn: "disableSSLCertificateCheck") << {
+	def from = new URL("https://curl.haxx.se/ca/cacert.pem")
+	def into = new File("${tasks['installCCGCoreSTestExecutable'].destinationDir}/cacert.pem")
+	into.parentFile.mkdirs()
+	from.withInputStream { i -> into.withOutputStream { it << i } }
+}
+
+tasks.whenTaskAdded { task ->
+	if (task.name == 'installCCGCoreSTestExecutable')
+		task.dependsOn fetchCacertPem
+}
+
+// do this after all because of ConfigVariableBug of oai.reqm2 (whenTaskAdded)
+apply from: 'dependencies.gradle'
+apply from: 'klocwork.gradle'
+
+build.dependsOn test
+build.dependsOn itest
+build.dependsOn stest
